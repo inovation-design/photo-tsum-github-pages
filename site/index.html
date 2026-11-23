@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>フォトツム</title>
+<meta name="theme-color" content="#d9efff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="フォトツム">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<style>
+:root{color-scheme:light;--bg:#d9efff;--panel:#fff;--ink:#27304d;--sub:#6b7699;--acc:#ff5f8a;--line:#c3dcf3}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font-family:"Hiragino Sans","Yu Gothic",Meiryo,system-ui,sans-serif;display:flex;justify-content:center;padding:18px 14px}
+main{width:100%;max-width:400px}
+h1.brand{display:flex;justify-content:center;align-items:center;margin:0 auto 6px}
+h1.brand img{display:block;width:100%;max-width:400px;height:auto;max-height:210px;object-fit:contain}
+p{margin:0 0 14px;color:var(--sub);font-size:.88rem;line-height:1.6}
+.card{background:var(--panel);border-radius:18px;padding:14px;margin-bottom:12px}
+#slots{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.slot{position:relative;aspect-ratio:1;border-radius:50%;border:2px dashed var(--line);background:#f3f9ff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:var(--sub);padding:0;overflow:visible}
+.slot input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border-radius:50%}
+.slot .x{z-index:2}
+.addl{position:relative;display:block;width:100%;padding:12px;margin-top:12px;border:1px solid var(--line);border-radius:12px;background:#fff;text-align:center;font-weight:700;cursor:pointer}
+.addl input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.slot img{width:100%;height:100%;border-radius:50%;object-fit:cover;border:3px solid var(--acc)}
+.slot .x{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:0;background:var(--ink);color:#fff;font-size:.8rem;line-height:1;cursor:pointer}
+button.b{width:100%;padding:13px;border:0;border-radius:12px;background:var(--acc);color:#fff;font-size:1.05rem;font-weight:700;cursor:pointer}
+button.s{flex:1;padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);font-size:.88rem;cursor:pointer}
+.row{display:flex;gap:8px}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+#hud{display:flex;justify-content:space-between;font-weight:700;margin-bottom:8px}
+#bar{height:8px;border-radius:4px;background:#fff;margin-bottom:8px;overflow:hidden}
+#barf{display:block;height:100%;width:100%;background:var(--acc);transition:width .25s linear}
+.m{border:0;background:none;font-size:1.2rem;cursor:pointer;padding:0 2px}
+#cv{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;display:block;width:100%;background:#fff;border-radius:18px;touch-action:none}
+#over{display:none;text-align:center}
+#msg{min-height:1.4em;color:var(--acc);font-weight:600;margin:8px 0 0}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<h1 class="brand"><img src="./title-logo.png" alt="フォトツム"></h1>
+<div id="setup">
+<p>好きな写真をキャラクターにして遊べます。写真は合計5枚まで登録でき、一度に追加できるのも5枚までです。ゲームでは登録した写真を使います(3枚未満のときは絵文字が補われます)。写真はこの端末の中だけで処理され、外部には送信されません。</p>
+<div class="card"><div id="slots"></div>
+<p style="margin:10px 0 0;font-size:.8rem">丸をタップして1枚ずつ選ぶか、まとめて追加から最大5枚選べます。</p>
+<label class="addl">写真をまとめて追加(最大5枚)<input type="file" id="multi" accept="image/*" multiple></label></div>
+<div class="card" style="text-align:center">ハイスコア <b id="best">0</b></div>
+<button class="b" id="start">スタート</button>
+<div class="row" style="margin-top:12px">
+<button class="s" id="exp">セーブを書き出す</button>
+<button class="s" id="imp">セーブを読み込む</button>
+</div>
+<p id="msg"></p>
+</div>
+
+<div id="game" hidden>
+<div id="hud"><span>スコア <b id="sc">0</b></span><span id="chain"></span><span>残り <b id="tm">60</b>秒</span><button class="m" id="mute" aria-label="音の切り替え">🔊</button></div>
+<div id="bar"><i id="barf"></i></div>
+<canvas id="cv" width="360" height="540"></canvas>
+<div id="over" class="card" style="margin-top:12px">
+<div style="font-size:1.2rem;font-weight:700" id="res"></div>
+<p id="nb" style="margin:6px 0 12px"></p>
+<div class="row"><button class="s" id="again">もう一度</button><button class="s" id="back">写真を変える</button></div>
+</div>
+</div>
+<input type="file" id="jf" accept=".json,application/json" hidden>
+<noscript><div class="card">このゲームはJavaScriptを使います。iOSのファイルプレビューが静止プレビューのみの場合は操作できません。端末に保存したこのHTMLを、JavaScriptを実行できるHTMLビューアで開いてください。ゲーム本体はこのファイルに含まれており、オフラインで動作します。</div></noscript>
+</main>
+<script>
+const KEY="photo-tsum-save",W=360,H=540,R=30,SLOTS=5,MAX_BATCH=5,DEF=["🐶","🐱","🐰","🐻","🐼"],COL=["#ffd6e0","#d6f0ff","#e2f7d4","#fff1c1","#e6dcff"],DOT=["#ff7aa2","#4fb4ff","#5ccf7a","#ffb92e","#a98bff"],TOTAL=60000,START_N=42;
+let save={v:1,photos:Array(SLOTS).fill(null),best:0};
+const $=id=>document.getElementById(id);
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.v===1&&Array.isArray(s.photos)){s.photos=Array.from({length:SLOTS},(_,i)=>typeof s.photos[i]==="string"?s.photos[i]:null);s.best=+s.best||0;save=s}}catch(e){}}
+function store(){try{localStorage.setItem(KEY,JSON.stringify(save))}catch(e){}}
+
+/* ---------- setup ---------- */
+function readPhoto(f){return new Promise((res,rej)=>{
+  const u=URL.createObjectURL(f),img=new Image();
+  img.onload=()=>{const c=document.createElement("canvas");c.width=c.height=112;const x=c.getContext("2d");
+    const m=Math.min(img.width,img.height);x.drawImage(img,(img.width-m)/2,(img.height-m)/2,m,m,0,0,112,112);
+    URL.revokeObjectURL(u);res(c.toDataURL("image/jpeg",.82))};
+  img.onerror=()=>{URL.revokeObjectURL(u);rej()};img.src=u})}
+async function addFiles(files,slot){
+  const picked=Array.from(files), limited=picked.length>MAX_BATCH;
+  let idx=slot,fail=0,full=false;
+  for(const f of picked.slice(0,MAX_BATCH)){
+    if(idx==null)idx=save.photos.findIndex(p=>!p);
+    if(idx<0){full=true;break}
+    try{save.photos[idx]=await readPhoto(f)}catch(e){fail++}
+    idx=null;
+  }
+  store();drawSlots();
+  $("msg").textContent=full?"空き枠がないため、一部は追加されませんでした":fail?`${fail}枚は読み込めませんでした(対応していない形式の可能性があります)`:limited?"一度に選べるのは5枚までです。最初の5枚を追加しました":"写真を追加しました";
+}
+function drawSlots(){
+  const el=$("slots");el.innerHTML="";
+  save.photos.forEach((p,i)=>{
+    const l=document.createElement("label");l.className="slot";l.setAttribute("aria-label",`写真${i+1}を選ぶ`);
+    if(p){const im=new Image();im.src=p;l.appendChild(im)}else l.appendChild(document.createTextNode("+"));
+    const inp=document.createElement("input");inp.type="file";inp.accept="image/*";
+    inp.onchange=e=>{addFiles([...e.target.files],i);e.target.value=""};
+    l.appendChild(inp);
+    if(p){const x=document.createElement("button");x.className="x";x.textContent="×";x.setAttribute("aria-label","削除");
+      x.onclick=e=>{e.preventDefault();e.stopPropagation();save.photos[i]=null;store();drawSlots()};l.appendChild(x)}
+    el.appendChild(l);
+  });
+  $("best").textContent=save.best;
+}
+$("multi").onchange=e=>{addFiles([...e.target.files],null);e.target.value=""};
+$("exp").onclick=async()=>{
+  const blob=new Blob([JSON.stringify(save)],{type:"application/json"});
+  try{const f=new File([blob],"photo-tsum-save.json",{type:"application/json"});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f]});$("msg").textContent="共有メニューから「ファイルに保存」を選んでください";return}}
+  catch(e){if(e&&e.name==="AbortError")return}
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="photo-tsum-save.json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);$("msg").textContent="セーブデータを書き出しました";
+};
+$("imp").onclick=()=>$("jf").click();
+$("jf").onchange=e=>{
+  const f=e.target.files[0];e.target.value="";if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{try{const s=JSON.parse(r.result);if(s.v!==1||!Array.isArray(s.photos))throw 0;
+    s.photos=Array.from({length:SLOTS},(_,i)=>typeof s.photos[i]==="string"?s.photos[i]:null);s.best=+s.best||0;
+    save=s;store();drawSlots();$("msg").textContent="セーブデータを読み込みました"}catch(err){$("msg").textContent="このファイルは読み込めません"}};
+  r.readAsText(f);
+};
+
+/* ---------- game ---------- */
+const cv=$("cv"),g=cv.getContext("2d");
+let chars=[],ps=[],fx=[],queue=0,chain=[],score=0,endAt=0,running=false,drag=false,last=null,frame=0,timing=false,tok=0,mute=false,ac=null;
+
+function buildChars(){
+  chars=[];
+  const ph=save.photos.filter(Boolean).sort(()=>Math.random()-.5).slice(0,5);
+  ph.forEach(p=>{const im=new Image();im.src=p;chars.push({img:im})});
+  for(let i=0;chars.length<3;i++)chars.push({emoji:DEF[i]});
+  chars.forEach((c,i)=>{c.col=COL[i];c.dot=DOT[i]});
+}
+function beep(f,d,v){
+  if(mute)return;
+  try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();if(ac.state==="suspended")ac.resume();
+    const o=ac.createOscillator(),gn=ac.createGain();o.type="sine";o.frequency.value=f;
+    gn.gain.setValueAtTime(v||.07,ac.currentTime);gn.gain.exponentialRampToValueAtTime(.001,ac.currentTime+(d||.08));
+    o.connect(gn);gn.connect(ac.destination);o.start();o.stop(ac.currentTime+(d||.08))}catch(e){}
+}
+function startGame(){
+  buildChars();ps=[];fx=[];chain=[];score=0;queue=START_N;running=true;drag=false;frame=0;timing=false;
+  $("over").style.display="none";$("sc").textContent=0;$("chain").textContent="";$("tm").textContent=60;$("barf").style.width="100%";
+  $("setup").hidden=true;$("game").hidden=false;loop(++tok);
+}
+function spawn(){
+  for(let k=0;k<6;k++){
+    const x=R+Math.random()*(W-2*R);
+    if(!ps.some(p=>p.y<R*3&&Math.abs(p.x-x)<R*2.1)){ps.push({x,y:-R,vx:0,vy:3,t:(Math.random()*chars.length)|0});queue--;return}
+  }
+}
+function physics(){
+  for(const p of ps){p.vy+=.35;p.x+=p.vx;p.y+=p.vy;p.vx*=.995}
+  for(let it=0;it<4;it++){
+    for(let i=0;i<ps.length;i++){const a=ps[i];
+      for(let j=i+1;j<ps.length;j++){const b=ps[j],dx=b.x-a.x,dy=b.y-a.y,d2=dx*dx+dy*dy;
+        if(d2<4*R*R&&d2>.0001){
+          const d=Math.sqrt(d2),nx=dx/d,ny=dy/d,o=(2*R-d)/2;
+          a.x-=nx*o;a.y-=ny*o;b.x+=nx*o;b.y+=ny*o;
+          const rv=(b.vx-a.vx)*nx+(b.vy-a.vy)*ny;
+          if(rv<0){const m=-rv*1.05/2;a.vx-=m*nx;a.vy-=m*ny;b.vx+=m*nx;b.vy+=m*ny}
+        }}
+      if(a.x<R){a.x=R;if(a.vx<0)a.vx*=-.2}
+      if(a.x>W-R){a.x=W-R;if(a.vx>0)a.vx*=-.2}
+      if(a.y>H-R){a.y=H-R;if(a.vy>0)a.vy*=-.1;a.vx*=.9}
+    }
+  }
+  for(const p of ps){if(Math.abs(p.vx)<.08)p.vx=0;if(Math.abs(p.vy)<.08&&p.y>0)p.vy*=.5}
+}
+function drawPiece(p,mode,col){
+  const c=chars[p.t],r=mode===2?R*1.13:R;
+  g.save();g.globalAlpha=mode===1?.4:1;
+  g.save();g.beginPath();g.arc(p.x,p.y,r,0,7);g.fillStyle=c.col;g.fill();g.clip();
+  if(c.img&&c.img.complete&&c.img.naturalWidth)g.drawImage(c.img,p.x-r,p.y-r,2*r,2*r);
+  else if(c.emoji){g.font=`${r*1.3}px sans-serif`;g.textAlign="center";g.textBaseline="middle";g.fillStyle="#000";g.fillText(c.emoji,p.x,p.y+2)}
+  g.restore();
+  g.beginPath();g.arc(p.x,p.y,r-1,0,7);
+  if(mode===2){g.shadowColor=col;g.shadowBlur=14;g.lineWidth=5;g.strokeStyle=col}else{g.lineWidth=2;g.strokeStyle="#fff"}
+  g.stroke();g.restore();
+}
+function popFx(list){
+  list.forEach(p=>{const d=chars[p.t].dot;
+    fx.push({k:"ring",x:p.x,y:p.y,t:0,c:d});
+    for(let i=0;i<7;i++){const a=Math.random()*6.28,v=2+Math.random()*3;fx.push({k:"dot",x:p.x,y:p.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-2,t:0,c:d})}});
+}
+function fxStep(){
+  fx.forEach(e=>{e.t++;if(e.k==="dot"){e.x+=e.vx;e.y+=e.vy;e.vy+=.2}else if(e.k==="txt")e.y-=1});
+  fx=fx.filter(e=>e.t<(e.k==="txt"?50:e.k==="ring"?18:34));
+}
+function render(){
+  g.clearRect(0,0,W,H);
+  const ok=chain.length>=3,col=ok?"#1fc98a":"#ff5f8a",tp=drag&&chain.length?chain[0].t:-1;
+  for(const p of ps)if(!chain.includes(p))drawPiece(p,tp>=0&&p.t!==tp?1:0);
+  if(chain.length>1){
+    g.save();g.lineJoin=g.lineCap="round";g.beginPath();chain.forEach((p,i)=>i?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y));
+    g.lineWidth=12;g.strokeStyle=ok?"rgba(31,201,138,.55)":"rgba(255,95,138,.5)";g.stroke();
+    g.lineWidth=3;g.strokeStyle="#fff";g.stroke();g.restore();
+  }
+  for(const p of chain)drawPiece(p,2,col);
+  if(chain.length){
+    const l=chain[chain.length-1],y=Math.max(20,l.y-R*1.9),rad=15+Math.min(chain.length,10);
+    g.save();g.beginPath();g.arc(l.x,y,rad,0,7);g.fillStyle=col;g.fill();g.lineWidth=3;g.strokeStyle="#fff";g.stroke();
+    g.fillStyle="#fff";g.font="bold 18px sans-serif";g.textAlign="center";g.textBaseline="middle";g.fillText(chain.length,l.x,y+1);g.restore();
+  }
+  for(const e of fx){
+    g.save();
+    if(e.k==="dot"){g.globalAlpha=1-e.t/34;g.fillStyle=e.c;g.beginPath();g.arc(e.x,e.y,5*(1-e.t/40),0,7);g.fill()}
+    else if(e.k==="ring"){g.globalAlpha=1-e.t/18;g.lineWidth=4;g.strokeStyle=e.c;g.beginPath();g.arc(e.x,e.y,R+e.t*1.6,0,7);g.stroke()}
+    else{g.globalAlpha=Math.min(1,(50-e.t)/20);g.font="bold 30px sans-serif";g.textAlign="center";g.lineWidth=5;g.strokeStyle="#fff";g.fillStyle="#ff5f8a";g.strokeText(e.s,e.x,e.y);g.fillText(e.s,e.x,e.y)}
+    g.restore();
+  }
+}
+function loop(t){
+  if(!running||t!==tok)return;
+  frame++;
+  if(queue>0&&frame%2===0)spawn();
+  if(!timing&&frame>=100){timing=true;endAt=Date.now()+TOTAL}
+  physics();fxStep();render();
+  const ms=timing?Math.max(0,endAt-Date.now()):TOTAL;
+  $("tm").textContent=Math.ceil(ms/1000);$("barf").style.width=(ms/TOTAL*100)+"%";
+  if(timing&&ms<=0){finish();return}
+  requestAnimationFrame(()=>loop(t));
+}
+function finish(){
+  running=false;chain=[];render();
+  const nb=score>save.best;if(nb){save.best=score;store()}
+  $("res").textContent=`スコア ${score}`;$("nb").textContent=nb?"ハイスコア更新!":`ハイスコア ${save.best}`;
+  $("over").style.display="block";
+}
+function pos(e){const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
+function hit(m,k){let best=null,bd=1e9;for(const p of ps){const d=Math.hypot(p.x-m.x,p.y-m.y);if(d<R*k&&d<bd){best=p;bd=d}}return best}
+function info(){
+  const n=chain.length;
+  $("chain").textContent=!n?"":n<3?`あと${3-n}個`:`${n}個 +${n*100+(n-3)*50}`;
+}
+function tryAdd(p){
+  if(!p)return;const n=chain.length;
+  if(n>1&&p===chain[n-2]){chain.pop();beep(300+chain.length*45,.05,.04)}
+  else if(!chain.includes(p)&&p.t===chain[0].t&&Math.hypot(p.x-chain[n-1].x,p.y-chain[n-1].y)<R*3.1){
+    chain.push(p);beep(330+chain.length*45,.09,.07);
+    if(navigator.vibrate)navigator.vibrate(8);
+  }
+}
+cv.addEventListener("pointerdown",e=>{
+  if(!running)return;e.preventDefault();cv.setPointerCapture(e.pointerId);
+  last=pos(e);const p=hit(last,1.4);
+  if(p){chain=[p];drag=true;beep(330,.06,.05);info()}
+});
+cv.addEventListener("pointermove",e=>{
+  if(!running||!drag)return;
+  const evs=e.getCoalescedEvents?e.getCoalescedEvents():[];if(!evs.length)evs.push(e);
+  for(const ev of evs){
+    const q=pos(ev),d=Math.hypot(q.x-last.x,q.y-last.y),n=Math.max(1,Math.ceil(d/(R*.4)));
+    for(let i=1;i<=n;i++)tryAdd(hit({x:last.x+(q.x-last.x)*i/n,y:last.y+(q.y-last.y)*i/n},1.15));
+    last=q;
+  }
+  info();
+});
+function release(){
+  if(!drag)return;drag=false;
+  const n=chain.length;
+  if(n>=3){
+    const gain=n*100+(n-3)*50,cx=chain.reduce((a,p)=>a+p.x,0)/n,cy=chain.reduce((a,p)=>a+p.y,0)/n;
+    popFx(chain);fx.push({k:"txt",x:Math.min(W-40,Math.max(40,cx)),y:Math.max(40,cy),t:0,s:"+"+gain});
+    ps=ps.filter(p=>!chain.includes(p));queue+=n;score+=gain;$("sc").textContent=score;
+    beep(520+n*25,.18,.1);beep(780+n*25,.22,.07);
+  }
+  chain=[];info();
+}
+cv.addEventListener("pointerup",release);
+cv.addEventListener("pointercancel",release);
+$("mute").onclick=()=>{mute=!mute;$("mute").textContent=mute?"🔇":"🔊"};
+
+$("start").onclick=startGame;
+$("again").onclick=startGame;
+$("back").onclick=()=>{running=false;$("game").hidden=true;$("setup").hidden=false;drawSlots()};
+load();drawSlots();
+try{localStorage.setItem("t","1");localStorage.removeItem("t")}catch(e){$("msg").textContent="このページでは自動保存できません。遊び終えたら「セーブを書き出す」でファイルに保存してください。"}
+if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js",{scope:"./"}).catch(()=>{}))}
+</script>
+</body>
+</html>
