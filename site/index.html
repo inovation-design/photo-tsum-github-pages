@@ -333,7 +333,11 @@ document.addEventListener("touchmove",e=>{
 },{passive:false});
 document.addEventListener("touchend",()=>{touchStart=null},{passive:true});
 document.addEventListener("touchcancel",()=>{touchStart=null},{passive:true});
+let visitorCounterBusy=false;
 async function updateVisitorCounter(){
+  if(visitorCounterBusy)return;
+  visitorCounterBusy=true;
+  try{
   const el=$("visitor-count"),seenKey="photo-tsum-visitor-seen",valueKey="photo-tsum-visitor-total";
   const endpoint="https://counterapi.com/api/inovation-design.github.io/view/photo-tsum-github-pages-unique-browsers";
   let seen=true,saved=null;
@@ -355,9 +359,19 @@ async function updateVisitorCounter(){
     if(saved!==null&&Number.isFinite(Number(saved)))el.textContent=Number(saved).toLocaleString("ja-JP")+"（前回）";
     else el.textContent="オンライン時に表示";
   }
+  }finally{visitorCounterBusy=false}
 }
 load();drawSlots();
 updateVisitorCounter();
+let visitorPollTimer=null;
+function startVisitorPolling(){
+  if(visitorPollTimer)clearInterval(visitorPollTimer);
+  visitorPollTimer=null;
+  if(document.visibilityState==="visible")visitorPollTimer=setInterval(()=>{if(navigator.onLine)updateVisitorCounter()},15000);
+}
+startVisitorPolling();
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){updateVisitorCounter();startVisitorPolling()}else if(visitorPollTimer){clearInterval(visitorPollTimer);visitorPollTimer=null}});
+window.addEventListener("online",updateVisitorCounter);
 try{localStorage.setItem("t","1");localStorage.removeItem("t")}catch(e){$("msg").textContent="このページでは自動保存できません。遊び終えたら「セーブを書き出す」でファイルに保存してください。"}
 if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js",{scope:"./"}).catch(()=>{}))}
 </script>
