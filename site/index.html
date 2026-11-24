@@ -13,7 +13,9 @@
 <style>
 :root{color-scheme:light;--bg:#d9efff;--panel:#fff;--ink:#27304d;--sub:#6b7699;--acc:#ff5f8a;--line:#c3dcf3}
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font-family:"Hiragino Sans","Yu Gothic",Meiryo,system-ui,sans-serif;display:flex;justify-content:center;padding:18px 14px}
+html,body{width:100%;max-width:100%;overflow-x:hidden;overscroll-behavior-x:none}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font-family:"Hiragino Sans","Yu Gothic",Meiryo,system-ui,sans-serif;display:flex;justify-content:center;padding:18px 14px;touch-action:pan-y}
+body.game-active{height:100%;min-height:0;overflow:hidden;overscroll-behavior:none;touch-action:none}
 main{width:100%;max-width:400px}
 h1.brand{display:flex;justify-content:center;align-items:center;margin:0 auto 6px}
 h1.brand img{display:block;width:100%;max-width:400px;height:auto;max-height:210px;object-fit:contain}
@@ -36,6 +38,11 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 #barf{display:block;height:100%;width:100%;background:var(--acc);transition:width .25s linear}
 .m{border:0;background:none;font-size:1.2rem;cursor:pointer;padding:0 2px}
 #cv{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;display:block;width:100%;background:#fff;border-radius:18px;touch-action:none}
+#game.is-playing{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;overflow:hidden;width:100%;height:100vh;height:100dvh;padding:max(8px,env(safe-area-inset-top)) 12px max(8px,env(safe-area-inset-bottom));background:var(--bg);touch-action:none;overscroll-behavior:none}
+#game.is-playing #hud,#game.is-playing #bar,#game.is-playing #over{width:min(100%,400px)}
+#game.is-playing #cv{width:min(100%,calc(66.6667vh - 80px));max-height:calc(100vh - 120px);height:auto;flex:none}
+#game.is-playing #over{position:absolute;left:50%;bottom:max(10px,env(safe-area-inset-bottom));transform:translateX(-50%);margin:0!important;z-index:2}
+@supports (height:100dvh){#game.is-playing{height:100dvh}#game.is-playing #cv{width:min(100%,calc(66.6667dvh - 80px));max-height:calc(100dvh - 120px)}}
 #over{display:none;text-align:center}
 #msg{min-height:1.4em;color:var(--acc);font-weight:600;margin:8px 0 0}
 [hidden]{display:none!important}
@@ -65,6 +72,8 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 <div id="over" class="card" style="margin-top:12px">
 <div style="font-size:1.2rem;font-weight:700" id="res"></div>
 <p id="nb" style="margin:6px 0 12px"></p>
+<div class="row" style="margin-bottom:8px"><button class="s" id="share">結果を共有</button><button class="s" id="xpost">Xに投稿</button></div>
+<p id="sharemsg" style="margin:0 0 8px;font-size:.8rem"></p>
 <div class="row"><button class="s" id="again">もう一度</button><button class="s" id="back">写真を変える</button></div>
 </div>
 </div>
@@ -134,6 +143,29 @@ $("jf").onchange=e=>{
 const cv=$("cv"),g=cv.getContext("2d");
 let chars=[],ps=[],fx=[],queue=0,chain=[],score=0,endAt=0,running=false,drag=false,last=null,frame=0,timing=false,tok=0,mute=false,ac=null;
 
+function lockCurrentOrientation(){
+  try{
+    const orientation=screen.orientation;
+    if(!orientation||typeof orientation.lock!=="function")return;
+    const mode=orientation.type&&orientation.type.startsWith("landscape")?"landscape":"portrait";
+    orientation.lock(mode).catch(()=>{});
+  }catch(e){}
+}
+function unlockOrientation(){try{screen.orientation?.unlock()}catch(e){}}
+function resultText(){return `フォトツムで${score}点を獲得しました！`}
+async function shareResult(){
+  const data={title:"フォトツム",text:resultText(),url:location.href.split("#")[0]};
+  if(navigator.share){try{await navigator.share(data);return}catch(e){if(e&&e.name==="AbortError")return}}
+  try{await navigator.clipboard.writeText(`${data.text} ${data.url}`);$("sharemsg").textContent="結果とURLをコピーしました"}
+  catch(e){openXPost()}
+}
+function openXPost(){
+  const url=new URL("https://twitter.com/intent/tweet");
+  url.searchParams.set("text",resultText());
+  url.searchParams.set("url",location.href.split("#")[0]);
+  window.open(url.href,"_blank","noopener,noreferrer");
+}
+
 function buildChars(){
   chars=[];
   const ph=save.photos.filter(Boolean).sort(()=>Math.random()-.5).slice(0,5);
@@ -150,6 +182,7 @@ function beep(f,d,v){
 }
 function startGame(){
   buildChars();ps=[];fx=[];chain=[];score=0;queue=START_N;running=true;drag=false;frame=0;timing=false;
+  document.body.classList.add("game-active");$("game").classList.add("is-playing");lockCurrentOrientation();
   $("over").style.display="none";$("sc").textContent=0;$("chain").textContent="";$("tm").textContent=60;$("barf").style.width="100%";
   $("setup").hidden=true;$("game").hidden=false;loop(++tok);
 }
@@ -233,6 +266,7 @@ function loop(t){
 }
 function finish(){
   running=false;chain=[];render();
+  unlockOrientation();
   const nb=score>save.best;if(nb){save.best=score;store()}
   $("res").textContent=`スコア ${score}`;$("nb").textContent=nb?"ハイスコア更新!":`ハイスコア ${save.best}`;
   $("over").style.display="block";
@@ -283,7 +317,19 @@ $("mute").onclick=()=>{mute=!mute;$("mute").textContent=mute?"🔇":"🔊"};
 
 $("start").onclick=startGame;
 $("again").onclick=startGame;
-$("back").onclick=()=>{running=false;$("game").hidden=true;$("setup").hidden=false;drawSlots()};
+$("share").onclick=shareResult;
+$("xpost").onclick=openXPost;
+$("back").onclick=()=>{running=false;unlockOrientation();document.body.classList.remove("game-active");$("game").classList.remove("is-playing");$("game").hidden=true;$("setup").hidden=false;drawSlots()};
+let touchStart=null;
+document.addEventListener("touchstart",e=>{if(e.touches.length===1)touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}},{passive:true});
+document.addEventListener("touchmove",e=>{
+  if(!touchStart||e.touches.length!==1)return;
+  const dx=Math.abs(e.touches[0].clientX-touchStart.x),dy=Math.abs(e.touches[0].clientY-touchStart.y);
+  if(document.body.classList.contains("game-active")){if(!e.target.closest("#cv"))e.preventDefault()}
+  else if(dx>dy)e.preventDefault();
+},{passive:false});
+document.addEventListener("touchend",()=>{touchStart=null},{passive:true});
+document.addEventListener("touchcancel",()=>{touchStart=null},{passive:true});
 load();drawSlots();
 try{localStorage.setItem("t","1");localStorage.removeItem("t")}catch(e){$("msg").textContent="このページでは自動保存できません。遊び終えたら「セーブを書き出す」でファイルに保存してください。"}
 if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js",{scope:"./"}).catch(()=>{}))}
