@@ -1,4 +1,4 @@
-const CACHE_NAME = "photo-tsum-gh-pages-v2";
+const CACHE_NAME = "photo-tsum-gh-pages-v3";
 const BASE_URL = new URL(self.registration.scope);
 const ASSETS = [
   "",

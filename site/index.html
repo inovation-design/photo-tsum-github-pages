@@ -21,6 +21,8 @@ h1.brand{display:flex;justify-content:center;align-items:center;margin:0 auto 6p
 h1.brand img{display:block;width:100%;max-width:400px;height:auto;max-height:210px;object-fit:contain}
 p{margin:0 0 14px;color:var(--sub);font-size:.88rem;line-height:1.6}
 .card{background:var(--panel);border-radius:18px;padding:14px;margin-bottom:12px}
+.visitors{display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 8px}
+.visitors small{grid-column:1/-1;color:var(--sub);font-size:.75rem;line-height:1.4}
 #slots{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
 .slot{position:relative;aspect-ratio:1;border-radius:50%;border:2px dashed var(--line);background:#f3f9ff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:var(--sub);padding:0;overflow:visible}
 .slot input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border-radius:50%}
@@ -57,6 +59,7 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 <p style="margin:10px 0 0;font-size:.8rem">丸をタップして1枚ずつ選ぶか、まとめて追加から最大5枚選べます。</p>
 <label class="addl">写真をまとめて追加(最大5枚)<input type="file" id="multi" accept="image/*" multiple></label></div>
 <div class="card" style="text-align:center">ハイスコア <b id="best">0</b></div>
+<div class="card visitors"><span>訪問者数（概算）</span><b id="visitor-count">取得中…</b><small>同じブラウザは初回だけ加算します。写真は送信されず、訪問数のみ匿名集計されます。</small></div>
 <button class="b" id="start">スタート</button>
 <div class="row" style="margin-top:12px">
 <button class="s" id="exp">セーブを書き出す</button>
@@ -330,7 +333,31 @@ document.addEventListener("touchmove",e=>{
 },{passive:false});
 document.addEventListener("touchend",()=>{touchStart=null},{passive:true});
 document.addEventListener("touchcancel",()=>{touchStart=null},{passive:true});
+async function updateVisitorCounter(){
+  const el=$("visitor-count"),seenKey="photo-tsum-visitor-seen",valueKey="photo-tsum-visitor-total";
+  const endpoint="https://counterapi.com/api/inovation-design.github.io/view/photo-tsum-github-pages-unique-browsers";
+  let seen=true,saved=null;
+  try{
+    seen=localStorage.getItem(seenKey)==="1";
+    saved=localStorage.getItem(valueKey);
+    const probe=seenKey+"-probe";localStorage.setItem(probe,"1");localStorage.removeItem(probe);
+  }catch(e){seen=true}
+  if(saved!==null&&Number.isFinite(Number(saved)))el.textContent=Number(saved).toLocaleString("ja-JP");
+  if(location.protocol!=="https:"&&location.protocol!=="http:"){if(saved===null)el.textContent="オンライン時に表示";return}
+  try{
+    const response=await fetch(seen?endpoint+"?readOnly=true":endpoint+"?unique=true",{cache:"no-store"});
+    if(!response.ok)throw new Error("counter unavailable");
+    const result=await response.json(),value=Number(result.value);
+    if(!Number.isFinite(value))throw new Error("invalid counter value");
+    try{localStorage.setItem(seenKey,"1");localStorage.setItem(valueKey,String(value))}catch(e){}
+    el.textContent=value.toLocaleString("ja-JP");
+  }catch(e){
+    if(saved!==null&&Number.isFinite(Number(saved)))el.textContent=Number(saved).toLocaleString("ja-JP")+"（前回）";
+    else el.textContent="オンライン時に表示";
+  }
+}
 load();drawSlots();
+updateVisitorCounter();
 try{localStorage.setItem("t","1");localStorage.removeItem("t")}catch(e){$("msg").textContent="このページでは自動保存できません。遊び終えたら「セーブを書き出す」でファイルに保存してください。"}
 if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js",{scope:"./"}).catch(()=>{}))}
 </script>
